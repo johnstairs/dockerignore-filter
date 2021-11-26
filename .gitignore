@@ -12,3 +12,5 @@
 *.out
 
 dockerignore-filter
+
+dist/
