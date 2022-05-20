@@ -24,7 +24,7 @@ func main() {
 		return
 	}
 
-	ignoreFile, err := os.Open(os.Args[0])
+	ignoreFile, err := os.Open(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
