@@ -23,5 +23,8 @@
 		"golang.Go"
 	],
 
-	"remoteUser": "vscode"
+	"remoteUser": "vscode",
+	"features": {
+		"docker-from-docker": "20.10"
+	}
 }

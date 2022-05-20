@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	"github.com/moby/moby/pkg/fileutils"
@@ -22,43 +24,55 @@ func main() {
 		return
 	}
 
-	ignorePatterns, err := loadIgnoreFile(os.Args[1])
+	ignoreFile, err := os.Open(os.Args[0])
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer ignoreFile.Close()
 
-	ignorePatternMatcher, err := fileutils.NewPatternMatcher(ignorePatterns)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		text := scanner.Text()
-		matches, err := ignorePatternMatcher.Matches(text)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if !matches {
-			if _, err := fmt.Println(text); err != nil {
-				log.Fatal(err)
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
+	if err := process(ignoreFile, os.Stdin, os.Stdout); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func loadIgnoreFile(filePath string) ([]string, error) {
-	fileHandle, err := os.Open(filePath)
+func process(ignoreReader io.Reader, inputPathreader io.Reader, outputPathWriter io.Writer) error {
+	ignorePatterns, err := dockerignore.ReadAll(ignoreReader)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer fileHandle.Close()
-	return dockerignore.ReadAll(fileHandle)
+
+	ignorePatternMatcher, err := fileutils.NewPatternMatcher(ignorePatterns)
+	if err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(inputPathreader)
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	for scanner.Scan() {
+		path := scanner.Text()
+
+		normalizedPath := filepath.Clean(path)
+		if filepath.IsAbs(normalizedPath) {
+			normalizedPath, _ = filepath.Rel(workingDir, normalizedPath)
+		}
+
+		matches, err := ignorePatternMatcher.Matches(normalizedPath)
+		if err != nil {
+			return err
+		}
+
+		if !matches {
+			if _, err := fmt.Fprintln(outputPathWriter, path); err != nil {
+				return err
+			}
+		}
+	}
+
+	return scanner.Err()
 }
 
 func printUsage() {
